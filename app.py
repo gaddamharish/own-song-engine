@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from pathlib import Path
 import math, random, struct, wave, uuid
+from vocals import synthesize_vocal
 
 BASE = Path(__file__).resolve().parent
 OUT = BASE / "generated"
@@ -18,6 +19,8 @@ class SongRequest(BaseModel):
     duration_seconds: int = Field(default=15, ge=5, le=60)
     bpm: int = Field(default=110, ge=60, le=180)
     seed: int = Field(default=7, ge=0, le=999999)
+    lyrics: str = Field(default="", max_length=800)
+    voice: str = Field(default="Female", pattern="^(Male|Female|Child)$")
 
 def envelope(t, duration):
     return min(1.0, t / 0.015) * min(1.0, max(0.0, (duration - t) / 0.06))
@@ -64,6 +67,7 @@ def make_song(path: Path, req: SongRequest):
                 if b in (0,2):
                     f=95-45*min(1,t/max(dur,0.001)); audio[i]+=0.17*math.sin(2*math.pi*f*t)*math.exp(-22*t)
                 else: audio[i]+=(rng.random()*2-1)*0.025*math.exp(-90*t)
+    vocal_info = synthesize_vocal(audio, sr, total, req.bpm, req.lyrics, req.language, req.voice, req.seed)
     peak=max(max(abs(x) for x in audio),1e-9); factor=0.88/peak
     with wave.open(str(path),"wb") as wf:
         wf.setnchannels(1); wf.setsampwidth(2); wf.setframerate(sr)
@@ -76,14 +80,14 @@ def home(): return (BASE/"static"/"index.html").read_text(encoding="utf-8")
 
 @app.get("/health")
 def health():
-    return {"status":"ok","engine":"own-procedural-synth","version":"0.1.0","capability":"instrumental prototype; neural singing is not implemented"}
+    return {"status":"ok","engine":"own-song-engine","version":"0.2.0","capabilities":["procedural instrumental composition","experimental formant-based vocal synthesis","Telugu/English lyric input"]}
 
 @app.post("/api/generate")
 def generate(req: SongRequest):
     filename=f"{uuid.uuid4().hex}.wav"; target=OUT/filename
     try: make_song(target,req)
     except Exception as exc: raise HTTPException(status_code=500,detail=f"Audio generation failed: {exc}")
-    return {"title":req.title,"language":req.language,"genre":req.genre,"duration_seconds":req.duration_seconds,"format":"WAV","note":"This prototype synthesizes instrumental music. It does not yet generate singing vocals.","audio_url":f"/audio/{filename}"}
+    return {"title":req.title,"language":req.language,"genre":req.genre,"duration_seconds":req.duration_seconds,"format":"WAV","voice":req.voice if req.lyrics.strip() else None,"lyrics_supplied":bool(req.lyrics.strip()),"vocal_syllables":vocal_info["syllables"],"note":"Original procedural music. If lyrics were supplied, vocals use experimental formant synthesis; pronunciation and naturalness are not human-quality yet.","audio_url":f"/audio/{filename}"}
 
 @app.get("/audio/{filename}")
 def audio(filename:str):
