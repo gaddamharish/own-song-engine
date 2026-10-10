@@ -1,8 +1,7 @@
-"""Optional ACE-Step 1.5 remote inference adapter.
+"""Optional ACE-Step 1.5 inference adapter.
 
-Set ACE_STEP_API_URL to the base URL of a self-hosted ACE-Step OpenRouter-compatible
-server (the server exposing POST /v1/chat/completions). This module never calls a
-provider unless that environment variable is configured.
+Configure ACE_STEP_API_URL with a reachable self-hosted ACE-Step OpenRouter-compatible
+server. No external service is contacted unless an endpoint is explicitly configured.
 """
 import base64
 import json
@@ -16,32 +15,19 @@ def generate_with_acestep(*, prompt: str, lyrics: str, language: str, duration: 
     base_url = os.getenv("ACE_STEP_API_URL", "").strip().rstrip("/")
     if not base_url:
         raise RuntimeError(
-            "Natural AI singing is not configured yet. Set ACE_STEP_API_URL to an "
-            "ACE-Step 1.5 inference server URL. The current Render app has no GPU model server."
+            "Natural AI singing is not configured. A reachable ACE-Step 1.5 inference "
+            "server is required; this lightweight Render app does not host the model."
         )
     api_key = os.getenv("ACE_STEP_API_KEY", "").strip()
     lang = {"Telugu": "te", "English": "en", "Telugu-English": "te"}.get(language, "te")
-    content = [
-        {"type": "text", "text": (
-            f"<prompt>{prompt}. Full song with clear, melodic human-like lead singing, "
-            f"natural phrasing, intelligible {language} pronunciation, warm professional "
-            f"mix, rhythmically aligned lyrics. Tempo {bpm} BPM.</prompt>\n"
-            f"<lyrics>{lyrics}</lyrics>"
-        )}
-    ]
-    if reference_path and reference_path.exists():
-        raw = base64.b64encode(reference_path.read_bytes()).decode("ascii")
-        content.append({
-            "type": "input_audio",
-            "input_audio": {"data": raw, "format": "wav"}
-        })
-        content[0]["text"] += (
-            " Use the supplied audio as a melody/arrangement reference where supported; "
-            "create a cover-like Telugu vocal replacement, not a verbatim copy of a recording."
-        )
+    content = [{"type": "text", "text": (
+        f"<prompt>{prompt}. Natural melodic lead singing, clear diction, expressive "
+        f"phrasing, polished mix, tempo {bpm} BPM. Sing the supplied lyrics in {language}.</prompt>"
+    )}]
     payload = {
-        "model": os.getenv("ACE_STEP_MODEL", "acestep/ACE-Step-v1.5"),
+        "model": os.getenv("ACE_STEP_MODEL", "acemusic/acestep-v15-turbo"),
         "messages": [{"role": "user", "content": content}],
+        "lyrics": lyrics,
         "stream": False,
         "thinking": True,
         "use_format": False,
@@ -49,9 +35,18 @@ def generate_with_acestep(*, prompt: str, lyrics: str, language: str, duration: 
             "duration": max(10, min(60, duration)),
             "bpm": bpm,
             "format": "mp3",
-            "vocal_language": lang
+            "vocal_language": lang,
+            "instrumental": False
         }
     }
+    if reference_path and reference_path.exists():
+        raw = base64.b64encode(reference_path.read_bytes()).decode("ascii")
+        content.append({
+            "type": "input_audio",
+            "input_audio": {"data": raw, "format": "wav"}
+        })
+        payload["task_type"] = "cover"
+        payload["audio_cover_strength"] = 0.75
     headers = {"Content-Type": "application/json"}
     if api_key:
         headers["Authorization"] = "Bearer " + api_key
