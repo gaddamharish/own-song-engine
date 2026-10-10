@@ -1,36 +1,52 @@
-# Own Song Engine — MVP 0.1
+# Own Song Engine — Vocal Prototype 0.2
 
-A small web app that generates original procedural instrumental music without paid music-generation APIs or pretrained model weights.
+A self-contained, original procedural music generator with an experimental formant-based vocal synthesizer. It does not call a paid music-generation API and does not download or run a pretrained singing model.
 
-## Current capability
-- Mobile-friendly web interface
-- Code-generated melody, chord bed, bass and simple percussion
-- WAV output
-- Configurable style, duration, tempo and random seed
-- Health endpoint at `/health`
+## Current capabilities
+- Mobile-friendly song studio
+- Procedural chord bed, bass, lead melody and percussion
+- Optional Telugu-script, English or mixed lyrics
+- Experimental synthesized vocal tones: Male, Female and Child profiles
+- Style, duration, tempo and deterministic variation seed controls
+- WAV output and health endpoint at /health
+- Docker/Render deployment
 
-## Important limitation
-This is an instrumental synthesizer, **not a natural singing model**. It does not sing Telugu or English lyrics and does not yet provide male, female or child vocals. Building neural singing from scratch requires appropriately licensed training data, a training pipeline, compute time and listening tests.
+## Important quality boundary
+This is a research prototype, **not a natural human-quality AI singer**. The vocal generator creates pitched harmonics shaped by approximate vowel formants and assigns lyric units to notes. It does not yet reliably pronounce complete words, model consonant transitions, sing expressive phonemes, or produce convincing child/female/male performances. Telugu syllabification is heuristic. The voice names refer only to synthesized pitch/formant presets, not recordings or real identities.
+
+The user constraint is to develop the engine in-house without paid generation APIs or downloaded pretrained singing models. That constraint is respected. A natural neural singing model trained from scratch would require a substantial, properly licensed vocal dataset, a training pipeline, evaluation, and considerably more compute than a no-GPU free web service can provide. This code is a foundation and listening-test prototype, not a claim that the full natural-singing problem is solved.
 
 ## Run locally
 Requires Python 3.11+.
 
-```bash
+~~~bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 uvicorn app:app --reload --host 0.0.0.0 --port 8000
-```
+~~~
 
 Open http://localhost:8000
 
-## Deploy
-This repository includes a Dockerfile and Render Blueprint configuration. Free hosting availability and sleep/storage limits depend on the host's current terms. Generated WAV files are temporary and may be lost on restart because this prototype has no persistent storage.
+## API
+POST /api/generate accepts JSON fields:
+- title: string
+- language: Telugu, English or Telugu-English
+- genre: Playful, Folk, Pop, Cinematic or Lullaby
+- duration_seconds: 5–60
+- bpm: 60–180
+- seed: integer
+- lyrics: optional string, up to 800 characters
+- voice: Male, Female or Child
 
-## Roadmap
-1. Add a melody and arrangement editor.
-2. Build a phoneme-aware Telugu and English lyrics pipeline.
-3. Implement a from-scratch singing model and training code.
-4. Acquire or record training data with proper permissions and consent.
-5. Benchmark intelligibility, naturalness, pronunciation and generation speed.
-6. Deploy neural inference only when it fits the selected host's memory and CPU limits.
+GET /health reports service health and implemented capabilities.
+
+## Deployment and storage
+The included Render Blueprint/Docker configuration can run on a free web-service tier when available. Free services may sleep, and generated audio is written to the container filesystem; files are not durable across restarts or redeploys. No persistent disk or external storage is configured.
+
+## Next engineering milestones
+1. Replace heuristic syllable splitting with Telugu akshara/phoneme segmentation and English grapheme-to-phoneme rules.
+2. Add note editor, phrase timing, rests, pitch contour, harmony and instrument arrangement.
+3. Improve source-filter synthesis with per-phoneme transitions, consonants, breath, vibrato and singer-specific controls.
+4. Build an original training-data collection/consent workflow before attempting any from-scratch learned singing model.
+5. Add objective and listening-based tests for pronunciation, pitch tracking, clipping, latency and intelligibility.
