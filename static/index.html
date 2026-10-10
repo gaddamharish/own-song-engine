@@ -7,7 +7,7 @@
 <style>
 body{font-family:system-ui;background:#10131b;color:#f5f7fb;margin:0}
 main{max-width:700px;margin:auto;padding:24px 16px}
-section{background:#191f2b;border:1px solid #30394b;border-radius:16px;padding:18px;margin:16px 0}
+section{background:#191f2b;border:1px solid #30394b;border-radius:16px;padding:18px;margin:16px 0}.upload-btn{display:block;text-align:center;padding:13px;border:1px dashed #73809a;border-radius:10px;margin-top:8px;cursor:pointer}.status{white-space:pre-wrap}
 label{display:block;margin:12px 0 5px;color:#dce2ed}
 input,select,textarea{box-sizing:border-box;width:100%;padding:12px;border-radius:9px;background:#101520;color:white;border:1px solid #3c465a;font:inherit}
 button{width:100%;padding:14px;margin-top:18px;border:0;border-radius:10px;background:#a6f0c6;font-weight:bold}
@@ -34,6 +34,23 @@ p{color:#bac3d5;line-height:1.5}audio{width:100%;margin-top:14px}.note{font-size
 </main>
 <script>
 const form=document.getElementById('f');
+const referenceInput=document.getElementById('referenceFile');
+const referenceResult=document.getElementById('referenceResult');
+referenceInput.addEventListener('change',async()=>{
+ const file=referenceInput.files[0]; if(!file)return;
+ if(file.size>30*1024*1024){referenceResult.textContent='File is larger than 30 MB. Choose a smaller file.';return;}
+ referenceResult.textContent='Uploading and extracting audio...';
+ const data=new FormData();data.append('file',file);
+ try{
+  const res=await fetch('/api/reference',{method:'POST',body:data});
+  const result=await res.json();if(!res.ok)throw new Error(result.detail||'Upload failed');
+  referenceResult.replaceChildren();
+  const info=document.createElement('p');info.textContent='Extracted '+result.duration_seconds+' seconds of audio from '+result.filename+'.';referenceResult.appendChild(info);
+  const player=document.createElement('audio');player.controls=true;player.src=result.audio_url;referenceResult.appendChild(player);
+  const link=document.createElement('a');link.href=result.audio_url;link.download='reference-audio.wav';link.textContent='Download extracted audio';link.style.display='block';link.style.color='#a6f0c6';link.style.marginTop='10px';referenceResult.appendChild(link);
+  const note=document.createElement('p');note.className='note';note.textContent=result.message;referenceResult.appendChild(note);
+ }catch(err){referenceResult.textContent='Upload error: '+err.message;}
+});
 form.addEventListener('submit',async function(e){
  e.preventDefault();
  const b=document.getElementById('go'),out=document.getElementById('result');
