@@ -124,6 +124,15 @@ def synthesize_vocal(audio, sample_rate, duration, bpm, lyrics, language, voice,
         midi = base_midi + scale[(idx + rng.randrange(0, 2)) % len(scale)] + (12 if idx % 7 == 5 else 0)
         fundamental = 440.0 * (2.0 ** ((midi - 69) / 12.0))
         amp = 0.15 if voice == "Male" else (0.12 if voice == "Female" else 0.095)
+        # Precompute the vowel's harmonic spectral envelope once per syllable.
+        harmonic_shapes = []
+        for h in range(1, 13):
+            hz = fundamental * h
+            def resonance(center):
+                width = max(100.0, center * 0.18)
+                return math.exp(-0.5 * ((hz - center) / width) ** 2)
+            shape = 0.55 * resonance(f1) + 0.8 * resonance(f2) + 0.45 * resonance(f3) + 0.035
+            harmonic_shapes.append(shape / (h ** 0.72))
         for i in range(begin, end):
             t = (i - begin) / sample_rate
             rel = t / max(dur, 1e-5)
