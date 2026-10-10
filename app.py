@@ -5,6 +5,8 @@ from pydantic import BaseModel, Field
 from pathlib import Path
 import math, random, struct, wave, uuid, subprocess, json
 from vocals import synthesize_vocal
+from neural_provider import generate_with_acestep
+import os
 
 BASE = Path(__file__).resolve().parent
 OUT = BASE / "generated"
@@ -13,6 +15,15 @@ MAX_REFERENCE_BYTES = 30 * 1024 * 1024
 ALLOWED_REFERENCE_EXTENSIONS = {".mp4", ".mov", ".m4v", ".mp3", ".wav", ".m4a", ".aac", ".ogg", ".webm", ".flac"}
 app = FastAPI(title="Own Song Engine", version="0.1.0")
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
+
+class AISongRequest(BaseModel):
+    title: str = Field(default="My AI Song", max_length=80)
+    language: str = Field(default="Telugu", pattern="^(Telugu|English|Telugu-English)$")
+    genre: str = Field(default="Playful", pattern="^(Playful|Folk|Pop|Cinematic|Lullaby)$")
+    duration_seconds: int = Field(default=15, ge=10, le=60)
+    bpm: int = Field(default=110, ge=60, le=180)
+    lyrics: str = Field(default="", min_length=1, max_length=800)
+    reference_id: str = Field(default="", max_length=64)
 
 class SongRequest(BaseModel):
     title: str = Field(default="My First Song", max_length=80)
@@ -83,7 +94,7 @@ def home(): return (BASE/"static"/"index.html").read_text(encoding="utf-8")
 
 @app.get("/health")
 def health():
-    return {"status":"ok","engine":"own-song-engine","version":"0.2.0","capabilities":["procedural instrumental composition","experimental formant-based vocal synthesis","Telugu/English lyric input"]}
+    return {"status":"ok","engine":"own-song-engine","version":"0.3.0","neural_provider_configured":bool(os.getenv("ACE_STEP_API_URL")),"capabilities":["procedural instrumental composition","experimental formant-based vocal synthesis","optional ACE-Step neural song generation when configured"]}
 
 @app.post("/api/reference")
 async def upload_reference(file: UploadFile = File(...)):
@@ -136,6 +147,55 @@ def reference_audio(reference_id: str):
     if not path.exists():
         raise HTTPException(status_code=404, detail="Reference audio not found")
     return FileResponse(path, media_type="audio/wav", filename="reference-audio.wav")
+
+@app.post("/api/generate-ai")
+def generate_ai(req: AISongRequest):
+    """Generate a neural song through an optional ACE-Step 1.5 server."""
+    ref_path = None
+    if req.reference_id:
+        if not req.reference_id.isalnum():
+            raise HTTPException(status_code=400, detail="Invalid reference ID.")
+        candidate = OUT / f"{req.reference_id}_reference.wav"
+        if not candidate.exists():
+            raise HTTPException(status_code=404, detail="Reference audio expired or not found. Upload it again.")
+        ref_path = candidate
+    prompt = {
+        "Playful": "Playful, catchy, bright family-friendly pop with lively percussion and memorable hook",
+        "Folk": "Contemporary Telugu folk-pop, rhythmic hand percussion, acoustic strings and lively groove",
+        "Pop": "Polished contemporary pop, strong chorus, punchy drums, melodic bass and bright synths",
+        "Cinematic": "Cinematic Indian pop, emotional build, rich orchestration and dramatic percussion",
+        "Lullaby": "Gentle soothing lullaby, soft piano, warm strings and delicate percussion"
+    }[req.genre]
+    mp3_path = OUT / f"{uuid.uuid4().hex}.mp3"
+    wav_path = OUT / f"{mp3_path.stem}.wav"
+    try:
+        mp3_data = generate_with_acestep(
+            prompt=prompt, lyrics=req.lyrics, language=req.language,
+            duration=req.duration_seconds, bpm=req.bpm, reference_path=ref_path
+        )
+        mp3_path.write_bytes(mp3_data)
+        proc = subprocess.run(
+            ["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
+             "-i", str(mp3_path), "-ac", "1", "-ar", "22050", "-c:a", "pcm_s16le", str(wav_path)],
+            capture_output=True, text=True, timeout=90
+        )
+        if proc.returncode != 0 or not wav_path.exists() or wav_path.stat().st_size < 44:
+            raise RuntimeError("Could not convert AI-generated audio to WAV.")
+    except Exception as exc:
+        mp3_path.unlink(missing_ok=True)
+        wav_path.unlink(missing_ok=True)
+        msg = str(exc)
+        code = 503 if "not configured" in msg.lower() else 502
+        raise HTTPException(status_code=code, detail=msg)
+    finally:
+        mp3_path.unlink(missing_ok=True)
+    return {
+        "title": req.title, "language": req.language, "genre": req.genre,
+        "duration_seconds": req.duration_seconds, "format": "WAV",
+        "engine": "ACE-Step 1.5 neural generation", "lyrics_supplied": True,
+        "note": "Neural song generated through your configured ACE-Step server. Telugu pronunciation and melody adherence should be checked by listening.",
+        "audio_url": f"/audio/{wav_path.name}"
+    }
 
 @app.post("/api/generate")
 def generate(req: SongRequest):
