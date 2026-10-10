@@ -123,7 +123,7 @@ def synthesize_vocal(audio, sample_rate, duration, bpm, lyrics, language, voice,
         f1 *= formant_scale; f2 *= formant_scale; f3 *= formant_scale
         midi = base_midi + scale[(idx + rng.randrange(0, 2)) % len(scale)] + (12 if idx % 7 == 5 else 0)
         fundamental = 440.0 * (2.0 ** ((midi - 69) / 12.0))
-        amp = 0.15 if voice == "Male" else (0.12 if voice == "Female" else 0.095)
+        amp = 0.52 if voice == "Male" else (0.46 if voice == "Female" else 0.38)
         # Precompute the vowel's harmonic spectral envelope once per syllable.
         harmonic_shapes = []
         for h in range(1, 13):
@@ -146,5 +146,5 @@ def synthesize_vocal(audio, sample_rate, duration, bpm, lyrics, language, voice,
             for h, shape in enumerate(harmonic_shapes, start=1):
                 source += math.sin(phase*h) * shape
             noise = (rng.random() * 2 - 1) * profile["breath"]
-            audio[i] += amp * env * (source * 1.7 + noise)
+            audio[i] += amp * env * (source * 2.2 + noise)
     return {"syllables": len(units), "voice": voice}
