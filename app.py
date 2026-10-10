@@ -1,14 +1,16 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from pathlib import Path
-import math, random, struct, wave, uuid
+import math, random, struct, wave, uuid, subprocess, json
 from vocals import synthesize_vocal
 
 BASE = Path(__file__).resolve().parent
 OUT = BASE / "generated"
 OUT.mkdir(exist_ok=True)
+MAX_REFERENCE_BYTES = 30 * 1024 * 1024
+ALLOWED_REFERENCE_EXTENSIONS = {".mp4", ".mov", ".m4v", ".mp3", ".wav", ".m4a", ".aac", ".ogg", ".webm", ".flac"}
 app = FastAPI(title="Own Song Engine", version="0.1.0")
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 
@@ -82,6 +84,58 @@ def home(): return (BASE/"static"/"index.html").read_text(encoding="utf-8")
 @app.get("/health")
 def health():
     return {"status":"ok","engine":"own-song-engine","version":"0.2.0","capabilities":["procedural instrumental composition","experimental formant-based vocal synthesis","Telugu/English lyric input"]}
+
+@app.post("/api/reference")
+async def upload_reference(file: UploadFile = File(...)):
+    suffix = Path(file.filename or "").suffix.lower()
+    if suffix not in ALLOWED_REFERENCE_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Upload an audio/video file: MP4, MOV, MP3, WAV, M4A, AAC, OGG, WEBM or FLAC.")
+    data = await file.read(MAX_REFERENCE_BYTES + 1)
+    if not data:
+        raise HTTPException(status_code=400, detail="The uploaded file is empty.")
+    if len(data) > MAX_REFERENCE_BYTES:
+        raise HTTPException(status_code=413, detail="Maximum upload size is 30 MB.")
+    source_id = uuid.uuid4().hex
+    source_path = OUT / f"{source_id}{suffix}"
+    audio_path = OUT / f"{source_id}_reference.wav"
+    source_path.write_bytes(data)
+    try:
+        proc = subprocess.run(
+            ["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
+             "-i", str(source_path), "-vn", "-ac", "1", "-ar", "22050",
+             "-t", "180", "-c:a", "pcm_s16le", str(audio_path)],
+            capture_output=True, text=True, timeout=90
+        )
+        if proc.returncode != 0 or not audio_path.exists() or audio_path.stat().st_size < 44:
+            raise HTTPException(status_code=400, detail="Could not extract audio. Please try a file containing an audio track.")
+        with wave.open(str(audio_path), "rb") as wf:
+            duration = round(wf.getnframes() / wf.getframerate(), 2)
+        return {
+            "reference_id": source_id,
+            "filename": Path(file.filename or "reference").name,
+            "duration_seconds": duration,
+            "audio_url": f"/audio-reference/{source_id}",
+            "status": "uploaded_audio_extracted",
+            "message": "Reference audio extracted successfully. This build can preview the reference; automatic melody matching and Telugu vocal replacement are not yet connected to generation."
+        }
+    except HTTPException:
+        raise
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=408, detail="Audio extraction timed out. Try a shorter file.")
+    except FileNotFoundError:
+        raise HTTPException(status_code=503, detail="Audio conversion is unavailable on the server.")
+    finally:
+        try: source_path.unlink(missing_ok=True)
+        except Exception: pass
+
+@app.get("/audio-reference/{reference_id}")
+def reference_audio(reference_id: str):
+    if not reference_id.isalnum():
+        raise HTTPException(status_code=404, detail="Reference audio not found")
+    path = OUT / f"{reference_id}_reference.wav"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Reference audio not found")
+    return FileResponse(path, media_type="audio/wav", filename="reference-audio.wav")
 
 @app.post("/api/generate")
 def generate(req: SongRequest):
