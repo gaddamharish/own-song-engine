@@ -17,6 +17,14 @@ p{color:#bac3d5;line-height:1.5}audio{width:100%;margin-top:14px}.note{font-size
 <body><main>
 <h1>Own Song Engine</h1>
 <p>Compose original music and experiment with synthesized Telugu or English vocals — no paid generation API.</p>
+<section id="referenceSection">
+<strong>Reference audio or video</strong>
+<p class="note">Upload a short video or audio file to extract its soundtrack for listening and reference. MP4, MOV, MP3, WAV, M4A, AAC, OGG, WEBM or FLAC; maximum 30 MB.</p>
+<label class="upload-btn" for="referenceFile">Choose audio or video file</label>
+<input id="referenceFile" type="file" accept=".mp4,.mov,.mp3,.wav,.m4a,.aac,.ogg,.webm,.flac,video/mp4,video/quicktime,audio/*">
+<div id="referenceResult" class="status" aria-live="polite"></div>
+<p class="note">Note: this extracts and previews audio only. It does not yet recreate the same melody with Telugu vocals.</p>
+</section>
 <section>
 <form id="f">
 <label for="title">Track title</label><input id="title" value="Little Star Jam" maxlength="80">
