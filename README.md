@@ -1,12 +1,12 @@
-# Own Song Engine — Vocal Prototype 0.2
+# Own Song Engine — Vocal Prototype 0.3
 
-A self-contained, original procedural music generator with an experimental formant-based vocal synthesizer. It does not call a paid music-generation API and does not download or run a pretrained singing model.
+A lightweight procedural music generator with an experimental local vocal synthesizer plus an optional ACE-Step 1.5 neural-song adapter. The current Render service has no GPU model server configured; neural generation remains disabled until ACE_STEP_API_URL points to a reachable ACE-Step OpenRouter-compatible inference server.
 
 ## Current capabilities
 - Mobile-friendly song studio
 - Procedural chord bed, bass, lead melody and percussion
 - Optional Telugu-script, English or mixed lyrics
-- Experimental synthesized vocal tones: Male, Female and Child profiles
+- Experimental local synthesized vocal tones: Male, Female and Child profiles\n- Optional neural song generation through a separately hosted ACE-Step 1.5 server\n- Optional uploaded reference audio passed to the neural server
 - Style, duration, tempo and deterministic variation seed controls
 - WAV output and health endpoint at /health
 - Docker/Render deployment
@@ -50,3 +50,20 @@ The included Render Blueprint/Docker configuration can run on a free web-service
 3. Improve source-filter synthesis with per-phoneme transitions, consonants, breath, vibrato and singer-specific controls.
 4. Build an original training-data collection/consent workflow before attempting any from-scratch learned singing model.
 5. Add objective and listening-based tests for pronunciation, pitch tracking, clipping, latency and intelligibility.
+
+
+## Optional neural song mode (ACE-Step 1.5)
+
+The studio now has a **Natural AI singing** mode and a backend endpoint at `POST /api/generate-ai`. This is an integration adapter, not a bundled model: Render's lightweight web container cannot host the model itself. To enable it, deploy an ACE-Step 1.5 server with its OpenRouter-compatible endpoint, then configure these Render environment variables:
+
+- `ACE_STEP_API_URL`: base URL of your ACE-Step server (without `/v1/chat/completions`)
+- `ACE_STEP_API_KEY`: optional bearer token if that server requires authentication
+- `ACE_STEP_MODEL`: optional model identifier; defaults to `acestep/ACE-Step-v1.5`
+
+The adapter sends lyrics, genre prompt, duration, tempo, language code, and—if uploaded—a reference WAV. It expects the ACE-Step OpenRouter-compatible response containing base64 audio. Do not set `ACE_STEP_API_URL` to an arbitrary website; it must be a server running the compatible API. The neural mode returns a clear setup error until configured. Telugu support and reference-melody fidelity must be tested on actual outputs; no model can be guaranteed to preserve an exact melody from a prompt alone.
+
+Official project/API documentation:
+- https://github.com/ace-step/ACE-Step-1.5
+- https://github.com/ace-step/ACE-Step-1.5/blob/main/docs/en/Openrouter_API_DOC.md
+
+This adapter does not itself provision or pay for GPU hosting. A hosted GPU endpoint may incur costs; verify its pricing before enabling it. The original local synthesizer remains available as a fallback.
