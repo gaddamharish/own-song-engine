@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: own-song-engine
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    autoDeploy: true
