@@ -27,6 +27,8 @@ p{color:#bac3d5;line-height:1.5}audio{width:100%;margin-top:14px}.note{font-size
 </section>
 <section>
 <form id="f">
+<label for="engine">Generation engine</label><select id="engine"><option value="neural">Natural AI singing (ACE-Step server)</option><option value="local">Experimental local synthesizer</option></select>
+<p class="note">Natural AI singing requires an ACE-Step inference server configured by the app administrator. The local option uses the current experimental synthesizer.</p>
 <label for="title">Track title</label><input id="title" value="Little Star Jam" maxlength="80">
 <label for="language">Language target</label><select id="language"><option>Telugu</option><option>English</option><option>Telugu-English</option></select>
 <label for="lyrics">Lyrics (optional, Telugu script or English)</label><textarea id="lyrics" maxlength="800" rows="4" placeholder="Enter your song lyrics here..."></textarea>
@@ -43,7 +45,7 @@ p{color:#bac3d5;line-height:1.5}audio{width:100%;margin-top:14px}.note{font-size
 <script>
 const form=document.getElementById('f');
 const referenceInput=document.getElementById('referenceFile');
-const referenceResult=document.getElementById('referenceResult');
+const referenceResult=document.getElementById('referenceResult');\nlet uploadedReferenceId='';
 referenceInput.addEventListener('change',async()=>{
  const file=referenceInput.files[0]; if(!file)return;
  if(file.size>30*1024*1024){referenceResult.textContent='File is larger than 30 MB. Choose a smaller file.';return;}
@@ -65,7 +67,10 @@ form.addEventListener('submit',async function(e){
  b.disabled=true;b.textContent='Generating...';out.textContent='Creating audio...';
  try{
  const body={title:document.getElementById('title').value,language:document.getElementById('language').value,genre:document.getElementById('genre').value,duration_seconds:Number(document.getElementById('duration').value),bpm:Number(document.getElementById('bpm').value),seed:Number(document.getElementById('seed').value),lyrics:document.getElementById('lyrics').value,voice:document.getElementById('voice').value};
- const res=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+ const engine=document.getElementById('engine').value;
+ const endpoint=engine==='neural'?'/api/generate-ai':'/api/generate';
+ if(engine==='neural'){body.reference_id=uploadedReferenceId;delete body.seed;delete body.voice;}
+ const res=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
  const data=await res.json();if(!res.ok)throw new Error(data.detail||'Generation failed');
  out.replaceChildren();
  const heading=document.createElement('h3');heading.textContent=data.title;out.appendChild(heading);
