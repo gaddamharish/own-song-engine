@@ -134,13 +134,8 @@ def synthesize_vocal(audio, sample_rate, duration, bpm, lyrics, language, voice,
             phase = 2 * math.pi * fundamental * t * vibrato
             # Harmonic source shaped by broad vowel formants.
             source = 0.0
-            for h in range(1, 22):
-                hz = fundamental * h
-                def resonance(center):
-                    width = max(100.0, center * 0.18)
-                    return math.exp(-0.5 * ((hz-center)/width)**2)
-                shape = (0.55*resonance(f1) + 0.8*resonance(f2) + 0.45*resonance(f3) + 0.035)
-                source += math.sin(phase*h) * shape / (h ** 0.72)
+            for h, shape in enumerate(harmonic_shapes, start=1):
+                source += math.sin(phase*h) * shape
             noise = (rng.random() * 2 - 1) * profile["breath"]
             audio[i] += amp * env * (source * 1.7 + noise)
     return {"syllables": len(units), "voice": voice}
