@@ -74,6 +74,7 @@ def make_song(path: Path, req: SongRequest):
         chunk=bytearray()
         for x in audio: chunk.extend(struct.pack("<h",int(max(-1,min(1,x*factor))*32767)))
         wf.writeframes(chunk)
+    return vocal_info
 
 @app.get("/",response_class=HTMLResponse)
 def home(): return (BASE/"static"/"index.html").read_text(encoding="utf-8")
@@ -85,7 +86,7 @@ def health():
 @app.post("/api/generate")
 def generate(req: SongRequest):
     filename=f"{uuid.uuid4().hex}.wav"; target=OUT/filename
-    try: make_song(target,req)
+    try: vocal_info = make_song(target,req)
     except Exception as exc: raise HTTPException(status_code=500,detail=f"Audio generation failed: {exc}")
     return {"title":req.title,"language":req.language,"genre":req.genre,"duration_seconds":req.duration_seconds,"format":"WAV","voice":req.voice if req.lyrics.strip() else None,"lyrics_supplied":bool(req.lyrics.strip()),"vocal_syllables":vocal_info["syllables"],"note":"Original procedural music. If lyrics were supplied, vocals use experimental formant synthesis; pronunciation and naturalness are not human-quality yet.","audio_url":f"/audio/{filename}"}
 
